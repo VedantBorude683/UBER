@@ -1,5 +1,5 @@
 const mongoose=require('mongoose');
-const bycrypt=require('bcrypt');
+const bcrypt=require('bcrypt');
 const jwt=require('jsonwebtoken');
 
 const captainSchema=new mongoose.Schema({
@@ -7,12 +7,12 @@ const captainSchema=new mongoose.Schema({
         firstname:{
             type:String,
             required:true,
-            minlength:[100,'firstname must be atleast 100 characters long'],
+            minlength:[3,'firstname must be atleast 3 characters long'],
         },
         lastname:{
             type:String,
             required:true,
-            minlength:[100,'lastname must be atleast 100 characters long'],
+            minlength:[3,'lastname must be atleast 3 characters long'],
         }
     },
     email:{
@@ -44,7 +44,7 @@ const captainSchema=new mongoose.Schema({
         plate:{
             type:String,
             required:true,
-            min:[1,'plate must be atleast 3 char long'],
+            minlength:[1,'plate must be atleast 1 char long'],
         },
         capacity:{
             type:Number,
@@ -56,6 +56,7 @@ const captainSchema=new mongoose.Schema({
             required:true,
             enum:['car','motorcycle','auto'],
         },
+    },
         location:{
             lat:{
                 type:Number,
@@ -64,8 +65,8 @@ const captainSchema=new mongoose.Schema({
             long:{
               type:Number,  
             }
-        }
-    }
+        },
+    
 
 })
 captainSchema.methods.generateAuthToken=function(){
