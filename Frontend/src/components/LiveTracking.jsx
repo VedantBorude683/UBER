@@ -1,175 +1,169 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
-import L from 'leaflet';
-import 'leaflet-routing-machine';
+import React, { useEffect, useRef, useState } from 'react';
+import tt from '@tomtom-international/web-sdk-maps';
+import { services } from '@tomtom-international/web-sdk-services';
 
-// Fix for default Leaflet marker icons
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+const apiKey = import.meta.env.VITE_TOMTOM_API_KEY;
 
-// 👇 Helper component to move the map
-const MapUpdater = ({ position }) => {
-    const map = useMap();
+const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
+    const mapElement = useRef(null);
+    const mapInstance = useRef(null);
+    const [mapLoaded, setMapLoaded] = useState(false);
+    
+    // Store Pickup/Dest markers here to delete them easily later
+    const markersRef = useRef([]);
+
+    // 1. Initialize Map & User Location (Blue Dot Logic)
     useEffect(() => {
-        if (position) {
-            map.flyTo([position.lat, position.lng], 16);
-        }
-    }, [position, map]);
-    return null;
-};
+        if (!mapElement.current || mapInstance.current) return;
 
-// 👇 UPDATED: Routing Control that calculates Time & Distance
-const RoutingControl = ({ pickup, destination, setTripDetails }) => {
-    const map = useMap();
-    const routingControlRef = useRef(null);
+        const defaultLocation = [73.8567, 18.5204]; // Pune Default
 
-    useEffect(() => {
-        if (!map || !pickup || !destination) return;
-
-        // Create the routing control
-        const routingControl = L.Routing.control({
-            waypoints: [
-                L.latLng(pickup.lat, pickup.lng),
-                L.latLng(destination.lat, destination.lng)
-            ],
-            routeWhileDragging: false,
-            show: false, // Hide the default text directions box
-            addWaypoints: false,
-            fitSelectedRoutes: true, // Auto-zoom to fit the path
-            lineOptions: {
-                styles: [{ color: 'blue', weight: 4, opacity: 0.7 }]
+        const map = tt.map({
+            key: apiKey,
+            container: mapElement.current,
+            center: defaultLocation, 
+            zoom: 15,
+            theme: {
+                style: 'main',
+                layer: 'basic',
+                source: 'vector',
             }
         });
 
-        // 👇 LISTENER: When route is found, update the badge state
-        routingControl.on('routesfound', function(e) {
-            const routes = e.routes;
-            const summary = routes[0].summary;
-            
-            // Convert to readable format
-            const distanceKm = (summary.totalDistance / 1000).toFixed(1);
-            const timeMin = Math.round(summary.totalTime / 60);
+        mapInstance.current = map;
 
-            // Update parent state to show the badge
-            setTripDetails({
-                distance: `${distanceKm} km`,
-                time: `${timeMin} min`
+        map.on('load', () => {
+            setMapLoaded(true);
+            map.addControl(new tt.NavigationControl());
+
+            // --- BLUE DOT LOGIC ---
+            
+            // 1. Create the Marker Element
+            const markerDiv = document.createElement('div');
+            markerDiv.id = 'user-marker';
+            markerDiv.style.width = '20px';
+            markerDiv.style.height = '20px';
+            markerDiv.style.backgroundColor = '#2563eb'; 
+            markerDiv.style.borderRadius = '50%';
+            markerDiv.style.border = '3px solid white';
+            markerDiv.style.boxShadow = '0 0 10px rgba(0,0,0,0.3)';
+
+            // 2. Add it to map IMMEDIATELY (at default location)
+            const userMarker = new tt.Marker({ element: markerDiv })
+                .setLngLat(defaultLocation)
+                .addTo(map);
+
+            // 3. Define function to update position
+            const updateLocation = (position) => {
+                const { latitude, longitude } = position.coords;
+                if(!latitude || !longitude) return;
+
+                // Move map center and marker to real location
+                map.setCenter([longitude, latitude]);
+                userMarker.setLngLat([longitude, latitude]);
+            };
+
+            const handleError = (error) => {
+                console.warn("Location error, staying at default.");
+            };
+
+            // 4. Ask browser for real location
+            navigator.geolocation.getCurrentPosition(updateLocation, handleError, {
+                enableHighAccuracy: false, 
+                timeout: 5000, 
+                maximumAge: Infinity 
             });
         });
-
-        routingControl.addTo(map);
-        routingControlRef.current = routingControl;
 
         return () => {
-            // Safe cleanup to prevent crashes
-            try {
-                if (map && routingControlRef.current) {
-                    map.removeControl(routingControlRef.current);
-                }
-            } catch (error) {
-                // Ignore cleanup errors
-            }
+            map.remove();
+            setMapLoaded(false);
+            mapInstance.current = null;
         };
-    }, [map, pickup, destination, setTripDetails]);
-
-    return null;
-};
-
-const LiveTracking = ({ pickupPosition, destinationPosition }) => {
-    const [currentPosition, setCurrentPosition] = useState({
-        lat: 18.5204,
-        lng: 73.8567
-    });
-
-    // 👇 State to store the calculated trip info (Duration & Dist)
-    const [tripDetails, setTripDetails] = useState(null);
-
-    useEffect(() => {
-        navigator.geolocation.getCurrentPosition((position) => {
-            const { latitude, longitude } = position.coords;
-            setCurrentPosition({
-                lat: latitude,
-                lng: longitude
-            });
-        });
     }, []);
 
-    // Reset details if the route is cleared (e.g., user cancels)
+    // 2. Handle Routing (Pickup -> Destination)
     useEffect(() => {
-        if (!pickupPosition || !destinationPosition) {
-            setTripDetails(null);
-        }
-    }, [pickupPosition, destinationPosition]);
+        if (!mapLoaded || !mapInstance.current) return;
+        const map = mapInstance.current;
 
-    const activePosition = pickupPosition || destinationPosition || currentPosition;
+        // --- CLEANUP ---
+        // 1. Remove Route Line
+        if (map.getLayer('route')) {
+            map.removeLayer('route');
+            map.removeSource('route');
+        }
+
+        // 2. Remove Old Pickup/Dest Markers (using Ref)
+        markersRef.current.forEach(marker => marker.remove());
+        markersRef.current = []; // Reset array
+
+        // --- VALIDATION ---
+        const hasValidPickup = pickupPosition && pickupPosition.lat && pickupPosition.lng;
+        const hasValidDest = destinationPosition && destinationPosition.lat && destinationPosition.lng;
+
+        if (!hasValidPickup || !hasValidDest) {
+            return; // Stop here if data is missing
+        }
+
+        // --- DRAW NEW MARKERS ---
+        const pickupMarker = new tt.Marker({ color: 'black' })
+            .setLngLat([pickupPosition.lng, pickupPosition.lat])
+            .setPopup(new tt.Popup({ offset: 35 }).setHTML("<b>Pickup</b>"))
+            .addTo(map);
+        
+        const destMarker = new tt.Marker({ color: '#22c55e' })
+            .setLngLat([destinationPosition.lng, destinationPosition.lat])
+            .setPopup(new tt.Popup({ offset: 35 }).setHTML("<b>Dropoff</b>"))
+            .addTo(map);
+
+        // Store in ref for next cleanup
+        markersRef.current.push(pickupMarker);
+        markersRef.current.push(destMarker);
+
+        // --- FIT MAP BOUNDS ---
+        const bounds = new tt.LngLatBounds();
+        bounds.extend([pickupPosition.lng, pickupPosition.lat]);
+        bounds.extend([destinationPosition.lng, destinationPosition.lat]);
+        map.fitBounds(bounds, { padding: 100, duration: 1000 });
+
+        // --- CALCULATE ROUTE ---
+        services.calculateRoute({
+            key: apiKey,
+            locations: [
+                [pickupPosition.lng, pickupPosition.lat],
+                [destinationPosition.lng, destinationPosition.lat]
+            ],
+            traffic: true
+        })
+        .then((response) => {
+            const geojson = response.toGeoJson();
+            map.addLayer({
+                id: 'route',
+                type: 'line',
+                source: { type: 'geojson', data: geojson },
+                paint: { 'line-color': '#2563eb', 'line-width': 6, 'line-opacity': 0.8 }
+            });
+        })
+        .catch(err => console.error("Route calculation failed:", err));
+
+    }, [mapLoaded, pickupPosition, destinationPosition]);
 
     return (
-        <div className="relative h-full w-full">
-            
-            {/* 👇 FLOATING BADGE: Appears only when a route is found */}
-            {tripDetails && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[999] bg-white px-6 py-2 rounded-full shadow-lg flex items-center gap-4 min-w-[200px] justify-center border border-gray-200">
-                    <div className='flex items-center gap-2'>
-                        <i className="ri-time-line text-lg font-bold text-black"></i>
-                        <span className="font-bold text-xl text-black">{tripDetails.time}</span>
-                    </div>
-                    <div className='h-6 w-[1px] bg-gray-300'></div>
-                    <div className='flex items-center gap-2'>
-                        <i className="ri-map-pin-distance-fill text-lg font-bold text-black"></i>
-                        <span className="font-bold text-xl text-black">{tripDetails.distance}</span>
-                    </div>
-                </div>
+        <div className="h-full w-full relative overflow-hidden">
+            <div ref={mapElement} className="h-full w-full" />
+
+            {/* Cancel Button */}
+            {pickupPosition && destinationPosition && (
+                 <button 
+                    onClick={() => {
+                        if (onCancel) onCancel();
+                    }}
+                    className="absolute top-10 right-4 bg-white p-3 rounded-full shadow-lg hover:bg-red-50 transition-colors z-50 flex items-center justify-center border border-gray-200"
+                 >
+                    <i className="ri-close-line text-xl font-bold text-red-600"></i>
+                 </button>
             )}
-
-            <MapContainer 
-                center={currentPosition} 
-                zoom={15} 
-                scrollWheelZoom={true}
-                touchZoom={true}
-                dragging={true}
-                zoomControl={false}
-                className="h-full w-full"
-            >
-                <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; OpenStreetMap contributors'
-                />
-                
-                {/* Markers */}
-                <Marker position={currentPosition}>
-                    <Popup>You are here</Popup>
-                </Marker>
-
-                {pickupPosition && (
-                    <Marker position={pickupPosition}>
-                        <Popup>Pickup Location</Popup>
-                    </Marker>
-                )}
-
-                {destinationPosition && (
-                    <Marker position={destinationPosition}>
-                        <Popup>Destination</Popup>
-                    </Marker>
-                )}
-
-                {/* Map Helpers */}
-                <MapUpdater position={activePosition} />
-                
-                {/* Route Logic */}
-                {pickupPosition && destinationPosition && (
-                    <RoutingControl 
-                        pickup={pickupPosition} 
-                        destination={destinationPosition} 
-                        setTripDetails={setTripDetails} // Pass setter to routing control
-                    />
-                )}
-            </MapContainer>
         </div>
     );
 };

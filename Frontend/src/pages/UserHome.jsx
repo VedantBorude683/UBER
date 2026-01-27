@@ -197,12 +197,22 @@ const UserHome = () => {
             gsap.to(sidebarRef.current, { transform: 'translateX(-100%)' });
         }
     }, [isSidebarOpen]);
+    const handleClearRoute = () => {
+    setPickup('');
+    setDestination('');
+    setPickupPosition(null);
+    setDestinationPosition(null);
+    setVehiclePanelOpen(false);
+    setPanelOpen(false);
+    setConfirmRidePanelOpen(false);
+    // Add any other state resets here
+};
 
     return (
         <div className='h-screen w-screen relative overflow-hidden bg-gray-100'>
             {/* Header */}
             <div className='fixed p-6 top-0 flex items-center justify-between w-screen z-10'>
-                <img onClick={() => setIsSidebarOpen(true)} className='w-16 cursor-pointer' src="https://upload.wikimedia.org/wikipedia/commons/c/cc/Uber_logo_2018.png" alt="Uber Logo" />
+                <img onClick={() => setIsSidebarOpen(true)} className='w-16 cursor-pointer pointer-events-auto' src="https://upload.wikimedia.org/wikipedia/commons/c/cc/Uber_logo_2018.png" alt="Uber Logo" />
             </div>
 
             {/* Sidebar Menu */}
@@ -232,6 +242,7 @@ const UserHome = () => {
                 <LiveTracking 
                     pickupPosition={pickupPosition} 
                     destinationPosition={destinationPosition} 
+                    onCancel={handleClearRoute}
                 />
             </div>
 

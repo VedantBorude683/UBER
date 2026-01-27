@@ -1,140 +1,107 @@
 const axios = require('axios');
 const captainModel = require('../models/captain.model');
 
-// 👇 HELPER: Keeps the API call logic clean and reusable
-async function fetchCoordinates(address) {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
-    try {
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'UberCloneApp/1.0'
-            }
-        });
-        if (response.data && response.data.length > 0) {
-            const location = response.data[0];
-            return {
-                lat: parseFloat(location.lat),
-                lng: parseFloat(location.lon)
-            };
-        }
-        return null;
-    } catch (error) {
-        return null;
-    }
-}
+// Load API Key from environment variables
+const apiKey = process.env.TOMTOM_API_KEY;
 
-// 👇 UPDATED: Smart Geocoding with Retry Logic
+// 1. Geocoding (Convert Address -> Coordinates)
 module.exports.getAddressCoordinate = async (address) => {
+    // TomTom Geocoding API: Search for the address
+    const url = `https://api.tomtom.com/search/2/geocode/${encodeURIComponent(address)}.json?key=${apiKey}&limit=1`;
+
     try {
-        // Attempt 1: Try the exact full address
-        let coordinates = await fetchCoordinates(address);
-        
-        // Attempt 2: If strict match fails, try "Place Name + City"
-        // Example: "Shop 5, Phoenix Mall, Viman Nagar, Pune" -> "Phoenix Mall, Pune"
-        if (!coordinates) {
-            const parts = address.split(',');
-            if (parts.length >= 3) {
-                const placeName = parts[0].trim();
-                const city = parts[parts.length - 2].trim(); // Usually city/district is 2nd to last
-                const simpleAddress = `${placeName}, ${city}`;
-                
-                console.log(`📍 Retrying with simple address: "${simpleAddress}"`);
-                coordinates = await fetchCoordinates(simpleAddress);
-            }
-        }
+        const response = await axios.get(url);
 
-        // Attempt 3: If that fails, remove the first part (Shop/Flat no) and try the Area
-        if (!coordinates) {
-             const parts = address.split(',');
-             const shortAddress = parts.slice(1).join(',').trim(); 
-             if (shortAddress.length > 5) {
-                 console.log(`📍 Retrying with short address: "${shortAddress}"`);
-                 coordinates = await fetchCoordinates(shortAddress);
-             }
-        }
-
-        if (coordinates) {
-            return coordinates;
+        if (response.data.results && response.data.results.length > 0) {
+            const position = response.data.results[0].position;
+            return {
+                lat: position.lat,
+                lng: position.lon
+            };
         } else {
-            // Only throw error if ALL 3 attempts fail
-            throw new Error('Unable to fetch coordinates'); 
+            // Fallback: If strict match fails, try stripping details (Smart Retry logic could go here)
+            throw new Error('Unable to fetch coordinates');
         }
-
     } catch (error) {
-        console.error("Coordinate Error:", error.message);
+        console.error("TomTom Geocode Error:", error.message);
         throw error;
     }
 }
 
-// 👇 STANDARD: Distance & Time Calculation
+// 2. Distance & Time (With LIVE TRAFFIC)
 module.exports.getDistanceTime = async (origin, destination) => {
     if (!origin || !destination) {
         throw new Error('Origin and destination are required');
     }
 
     try {
-        // These calls now use the smart retry logic above
+        // Step 1: Get coordinates for both locations
         const originCoords = await module.exports.getAddressCoordinate(origin);
         const destCoords = await module.exports.getAddressCoordinate(destination);
 
-        const originStr = `${originCoords.lng},${originCoords.lat}`;
-        const destStr = `${destCoords.lng},${destCoords.lat}`;
+        // TomTom Routing format: lat,lng:lat,lng
+        const routeRequest = `${originCoords.lat},${originCoords.lng}:${destCoords.lat},${destCoords.lng}`;
 
-        const url = `http://router.project-osrm.org/route/v1/driving/${originStr};${destStr}?overview=false`;
+        // Step 2: Fetch Route with Traffic Data (traffic=true)
+        const url = `https://api.tomtom.com/routing/1/calculateRoute/${routeRequest}/json?key=${apiKey}&traffic=true`;
 
         const response = await axios.get(url);
 
         if (response.data.routes && response.data.routes.length > 0) {
             const route = response.data.routes[0];
+            const summary = route.summary;
+            const legs = route.legs[0].points;
+
             return {
                 distance: {
-                    text: `${(route.distance / 1000).toFixed(1)} km`,
-                    value: route.distance
+                    text: `${(summary.lengthInMeters / 1000).toFixed(1)} km`,
+                    value: summary.lengthInMeters
                 },
                 duration: {
-                    text: `${Math.round(route.duration / 60)} mins`,
-                    value: route.duration
-                }
+                    // 'travelTimeInSeconds' includes delays from traffic jams
+                    text: `${Math.round(summary.travelTimeInSeconds / 60)} mins`,
+                    value: summary.travelTimeInSeconds
+                },
+                path: legs.map(point => ({ lat: point.latitude, lng: point.longitude }))
             };
         } else {
-            throw new Error('No route found');
+            throw new Error('No routes found');
         }
 
     } catch (err) {
-        console.error("Distance Error:", err.message);
+        console.error("TomTom Routing Error:", err.message);
         throw err;
     }
 }
 
-// 👇 STANDARD: AutoComplete Suggestions
+// 3. AutoComplete Suggestions
 module.exports.getAutoCompleteSuggestions = async (input) => {
     if (!input) {
         throw new Error('query is required');
     }
 
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(input)}&format=json&limit=5`;
+    // TomTom Fuzzy Search for autocomplete
+    const url = `https://api.tomtom.com/search/2/search/${encodeURIComponent(input)}.json?key=${apiKey}&limit=5&typeahead=true`;
 
     try {
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'UberCloneApp/1.0'
-            }
-        });
+        const response = await axios.get(url);
 
-        if (response.data) {
-            return response.data.map(item => ({
-                description: item.display_name,
-                place_id: item.place_id
+        if (response.data.results) {
+            return response.data.results.map(result => ({
+                // Format matches what your frontend expects
+                description: result.address.freeformAddress, 
+                place_id: result.id 
             }));
         } else {
-            throw new Error('Unable to fetch suggestions');
+            return [];
         }
     } catch (err) {
-        console.error(err);
-        throw err;
+        console.error("TomTom Autocomplete Error:", err.message);
+        return [];
     }
 }
 
+// 4. Captain Search (Database Logic - Unchanged)
 module.exports.getCaptainsInTheRadius = async (ltd, lng, radius) => {
     const captains = await captainModel.find({
         location: {
