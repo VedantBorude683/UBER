@@ -35,8 +35,10 @@ module.exports.registerCaptain = async (req, res, next) => {
    
     // 3. FIX: Call generateAuthToken() on the instance 'captain', not the model
     const token = captain.generateAuthToken();
+    const captainResponse = captain.toObject();
+    delete captainResponse.password;
 
-    res.status(201).json({ token, captain });
+    res.status(201).json({ token, captain: captainResponse });
 }
 
 module.exports.loginCaptain = async (req, res, next) => {
@@ -45,26 +47,30 @@ module.exports.loginCaptain = async (req, res, next) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email, password } = req.body;
+    try {
+        const { email, password } = req.body;
+        const captain = await captainModel.findOne({ email: email.trim().toLowerCase() }).select('+password');
 
-    // Need to select password explicitly
-    const captain = await captainModel.findOne({ email }).select('+password');
+        if (!captain || !captain.password) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
 
-    if (!captain) {
-        return res.status(401).json({ message: 'Invalid email or password' });
+        const isMatch = await captain.comparePassword(password);
+
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        const token = captain.generateAuthToken();
+        const captainResponse = captain.toObject();
+        delete captainResponse.password;
+
+        res.cookie('token', token);
+        return res.status(200).json({ token, captain: captainResponse });
+    } catch (error) {
+        console.error('Captain login error:', error.message);
+        return next(error);
     }
-
-    const isMatch = await captain.comparePassword(password);
-
-    if (!isMatch) {
-        return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    const token = captain.generateAuthToken();
-
-    res.cookie('token', token);
-
-    res.status(200).json({ token, captain });
 }
 
 module.exports.getCaptainProfile = async (req, res, next) => {

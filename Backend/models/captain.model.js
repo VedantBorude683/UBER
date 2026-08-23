@@ -33,7 +33,7 @@ const captainSchema=new mongoose.Schema({
     status:{
         type:String,
         enum:['active','inactive'],
-        default:'inactive',
+        default:'active',
     },
     vehicle:{
         color:{
@@ -57,18 +57,21 @@ const captainSchema=new mongoose.Schema({
             enum:['car','motorcycle','auto'],
         },
     },
-        location:{
-            lat:{
-                type:Number,
-
-            },
-            long:{
-              type:Number,  
-            }
+    // GeoJSON is required by MongoDB's 2dsphere index. Coordinates are
+    // always stored as [longitude, latitude].
+    location: {
+        type: {
+            type: String,
+            enum: ['Point'],
         },
+        coordinates: {
+            type: [Number],
+        },
+    },
     
 
 })
+
 captainSchema.methods.generateAuthToken=function(){
     const token=jwt.sign({_id:this._id},process.env.JWT_SECRET,{expiresIn:'24h'});
     return token;
@@ -79,5 +82,9 @@ captainSchema.methods.comparePassword=async function (password){
 captainSchema.statics.hashPassword=async function (password){
     return await bcrypt.hash(password,10);
 }
+captainSchema.index({ location: '2dsphere' });
 const captainModel=mongoose.model('captain',captainSchema);
+
+
+
 module.exports=captainModel;
