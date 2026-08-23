@@ -26,7 +26,7 @@ const UserLogout = () => {
     }, [navigate]);
 
     return (
-        <div className='h-screen flex items-center justify-center bg-gray-100 text-gray-800 font-bold text-xl'>
+        <div className='min-h-[100dvh] px-5 flex items-center justify-center bg-gray-100 text-center text-gray-800 font-bold text-xl'>
             Logging out...
         </div>
     )

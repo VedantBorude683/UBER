@@ -30,7 +30,7 @@ const Start = () => {
   const currentView = isCaptain ? config.captain : config.user;
 
   return (
-    <div className="h-[100dvh] w-full bg-black overflow-hidden relative">
+    <div className="min-h-[100dvh] w-full bg-black overflow-hidden relative">
       
       {/* BACKGROUND IMAGE LAYER - AnimatePresence handles the crossfade */}
       <div className="absolute inset-0 z-0">

@@ -44,7 +44,7 @@ const UserLogin = () => {
   };
 
   return (
-    <div className='h-[100dvh] p-7 flex flex-col justify-between bg-white'>
+    <div className='min-h-[100dvh] w-full max-w-md mx-auto p-5 sm:p-7 flex flex-col justify-between bg-white'>
         
         {/* Top Section */}
         <div>

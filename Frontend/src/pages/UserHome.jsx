@@ -321,9 +321,9 @@ const handleUseCurrentLocation = () => {
 
 
     return (
-        <div className='h-screen w-screen relative overflow-hidden bg-gray-100'>
+        <div className='h-[100dvh] w-full relative overflow-hidden bg-gray-100'>
             {/* Header */}
-            <div className='fixed p-6 top-0 flex items-center justify-between w-screen z-10'>
+            <div className='fixed p-4 sm:p-6 top-0 flex items-center justify-between w-full z-10'>
                 <img onClick={() => setIsSidebarOpen(true)} className='w-16 cursor-pointer pointer-events-auto' src="https://upload.wikimedia.org/wikipedia/commons/c/cc/Uber_logo_2018.png" alt="Uber Logo" />
             </div>
 

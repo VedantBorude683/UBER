@@ -51,8 +51,9 @@ const CaptainSignup = () => {
 
       if (response.status === 201) {
         const data = response.data;
-        setCaptain(data.captain);
+        setCaptain({...data.captain, status: "active"});
         localStorage.setItem('token', data.token);
+       
         navigate('/captain-home');
       }
     } catch (error) {
@@ -82,7 +83,7 @@ const CaptainSignup = () => {
   };
 
   return (
-    <div className='py-5 px-5 h-screen flex flex-col justify-between'>
+    <div className='min-h-[100dvh] w-full max-w-md mx-auto py-5 px-5 flex flex-col justify-between'>
       <div>
         <img className='w-16 mb-10' src="https://www.svgrepo.com/show/505031/uber-driver.svg" alt="" />
 

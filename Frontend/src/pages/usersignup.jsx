@@ -46,7 +46,7 @@ const UserSignup = () => {
   };
 
   return (
-    <div className='p-7 h-screen flex flex-col justify-between'>
+    <div className='min-h-[100dvh] w-full max-w-md mx-auto p-5 sm:p-7 flex flex-col justify-between'>
       <div>
         <img className='w-16 mb-10' src="https://upload.wikimedia.org/wikipedia/commons/c/cc/Uber_logo_2018.png" alt="" />
 
