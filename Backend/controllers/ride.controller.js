@@ -1,6 +1,6 @@
 const rideService = require('../services/ride.service');
 const { validationResult } = require('express-validator');
-const { sendMessageToSocketId } = require('../socket');
+const { sendMessageToSocketId, broadcastMessage } = require('../socket');
 const mapService = require('../services/maps.service');
 const rideModel = require('../models/ride.model');
 
@@ -68,12 +68,17 @@ module.exports.createRide = async (req, res) => {
                 console.log(`🔔 Sending Ride Request to Captain: ${captain.socketId}`);
                 sendMessageToSocketId(captain.socketId, {
                     event: 'new-ride',
-                    data: rideWithUser
+                    data: { ...rideWithUser.toObject(), vehicleType }
                 });
             } else {
                 console.log(`❌ Captain skipped (status=${captain.status}, socket=${captain.socketId ? 'connected' : 'missing'}, captainType=${captain.vehicle?.vehicleType}, rideType=${vehicleType})`);
             }
             
+        });
+
+        broadcastMessage({
+            event: 'new-ride',
+            data: { ...rideWithUser.toObject(), vehicleType }
         });
 
         } catch (notificationError) {

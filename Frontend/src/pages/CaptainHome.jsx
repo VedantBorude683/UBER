@@ -86,6 +86,12 @@ const CaptainHome = () => {
         if (!socket) return
 
         const handleNewRide = (data) => {
+            const captainType = captain?.vehicle?.vehicleType
+            const rideType = data?.vehicleType
+            const typeMatches = captainType === rideType ||
+                (captainType === 'motorcycle' && rideType === 'moto') ||
+                (captainType === 'moto' && rideType === 'motorcycle')
+            if (!typeMatches) return
             setRide(data)
             setRidePopupPanel(true)
         }
@@ -95,7 +101,7 @@ const CaptainHome = () => {
         return () => {
             socket.off('new-ride', handleNewRide)
         }
-    }, [socket])
+    }, [socket, captain])
 
     // Helper: convert address → lat/lng
     const getCoordinates = async (address) => {
