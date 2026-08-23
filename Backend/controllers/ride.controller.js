@@ -40,14 +40,17 @@ module.exports.createRide = async (req, res) => {
             pickupCoordinates.lng,
             CAPTAIN_SEARCH_RADIUS_KM
         );
+        const hasEligibleCaptain = captainsInRadius.some((captain) =>
+            captain.status === 'active' && captain.socketId && vehicleTypesMatch(captain.vehicle?.vehicleType, vehicleType)
+        );
         // Keep a connected captain eligible when mobile GPS is stale or the
         // geospatial record has not updated yet. Vehicle type still matches.
-        if (captainsInRadius.length === 0) {
+        if (!hasEligibleCaptain) {
             captainsInRadius = await require('../models/captain.model').find({
                 status: 'active',
                 socketId: { $exists: true, $ne: '' }
             });
-            console.log('No nearby captains found; checking active connected captains.');
+            console.log('No eligible nearby captain found; checking active connected captains.');
         }
         console.log(`🚕 Captains found within ${CAPTAIN_SEARCH_RADIUS_KM} km:`, captainsInRadius.length);
 
