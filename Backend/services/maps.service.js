@@ -101,14 +101,34 @@ module.exports.getAutoCompleteSuggestions = async (input) => {
     }
 }
 
-// 4. Captain Search (Database Logic - Unchanged)
-module.exports.getCaptainsInTheRadius = async (ltd, lng, radius) => {
+// 4. Captain Search
+module.exports.getCaptainsInTheRadius = async (lat, lng, radius) => {
     const captains = await captainModel.find({
         location: {
-            $geoWithin: {
-                $centerSphere: [ [ ltd, lng ], radius / 6371 ]
+            $near: {
+                $geometry: {
+                    type: 'Point',
+                    coordinates: [lng, lat]
+                },
+                $maxDistance: radius * 1000
             }
         }
     });
     return captains;
+}
+module.exports.getAddressFromCoordinates = async (lat, lng) => {
+    const apiKey = process.env.TOMTOM_API_KEY;
+    const url = `https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${apiKey}`;
+
+    try {
+        const response = await axios.get(url);
+        if (response.data.addresses && response.data.addresses.length > 0) {
+            return response.data.addresses[0].address.freeformAddress;
+        } else {
+            throw new Error('Unable to fetch address');
+        }
+    } catch (error) {
+        console.error(error);
+        throw error;
+    }
 }
