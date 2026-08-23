@@ -9,27 +9,31 @@ module.exports.registerUser = async (req, res, next) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { fullname, email, password } = req.body;
+    try {
+        const { fullname, email, password } = req.body;
+        const normalizedEmail = email.trim().toLowerCase();
+        const isUserAlreadyExist = await userModel.findOne({ email: normalizedEmail });
 
-    const isUserAlreadyExist = await userModel.findOne({ email });
+        if (isUserAlreadyExist) {
+            return res.status(400).json({ message: 'User already exists with this email' });
+        }
 
-    if (isUserAlreadyExist) {
-        return res.status(400).json({ message: 'User already exist' });
+        const hashedPassword = await userModel.hashPassword(password);
+        const user = await userService.createUser({
+            firstname: fullname.firstname,
+            lastname: fullname.lastname,
+            email: normalizedEmail,
+            password: hashedPassword
+        });
+
+        const token = user.generateAuthToken();
+        const userResponse = user.toObject();
+        delete userResponse.password;
+        return res.status(201).json({ token, user: userResponse });
+    } catch (error) {
+        console.error('User registration error:', error.message);
+        return next(error);
     }
-
-    // 1. FIXED: Changed 'hashpassword' to 'hashPassword' (Capital P)
-    const hashedPassword = await userModel.hashPassword(password);
-
-    const user = await userService.createUser({
-        firstname: fullname.firstname,
-        lastname: fullname.lastname,
-        email,
-        password: hashedPassword
-    });
-
-    const token = user.generateAuthToken();
-
-    res.status(201).json({ token, user });
 }
 
 module.exports.loginUser = async (req, res, next) => {
@@ -68,9 +72,9 @@ module.exports.logoutUser = async (req, res, next) => {
     res.clearCookie('token');
     
     // 2. FIXED: Added a space inside split(' ')
-    const token = req.cookies.token || req.headers.authorization.split(' ')[1];
+    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
 
-    await blackListTokenModel.create({ token });
+    if (token) await blackListTokenModel.create({ token });
 
     res.status(200).json({ message: 'Logged out' });
 }

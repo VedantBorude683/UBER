@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { UserDataContext } from '../context/UserContext.jsx';
 import { motion } from 'framer-motion';
+import { setAuthToken } from '../utils/authStorage';
 
 const UserSignup = () => {
   const [email, setEmail] = useState('');
@@ -28,15 +29,18 @@ const UserSignup = () => {
       password: password
     };
 
-    const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/users/register`, newUser);
+    try {
+      const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/users/register`, newUser);
 
-    if (response.status === 201) {
-      const data = response.data;
-      
-      setUser(data.user);
-      localStorage.setItem('token', data.token);
-      
-      navigate('/home');
+      if (response.status === 201) {
+        const data = response.data;
+        setUser(data.user);
+        setAuthToken('user', data.token);
+        navigate('/home');
+      }
+    } catch (error) {
+      console.error('User signup failed:', error);
+      alert(error.response?.data?.message || 'Unable to create account. Please try again.');
     }
 
     setEmail('');
