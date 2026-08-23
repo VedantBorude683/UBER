@@ -5,6 +5,9 @@ import tailwindcss from '@tailwindcss/postcss' // 👈 IMPORTANT: Import from th
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    minify: false,
+  },
   css: {
     postcss: {
       plugins: [
