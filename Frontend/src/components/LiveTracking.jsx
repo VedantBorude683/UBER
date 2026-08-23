@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import tt from '@tomtom-international/web-sdk-maps';
-import { services } from '@tomtom-international/web-sdk-services';
 
 const apiKey = import.meta.env.VITE_TOMTOM_API_KEY;
+const tt = window.tt;
 
 const LiveTracking = ({ pickupPosition, destinationPosition, onCancel, routeOrigin, routeDestination, destinationLabel = 'Destination', onLocationChange }) => {
     const mapElement = useRef(null);
@@ -35,6 +34,7 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel, routeOrig
 
         let map;
         try {
+            if (!tt) throw new Error('TomTom Maps SDK did not load.');
             map = tt.map({
                 key: apiKey.trim(),
                 container: mapElement.current,
@@ -158,16 +158,22 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel, routeOrig
         map.fitBounds(bounds, { padding: 100, duration: 1000 });
 
         // --- CALCULATE ROUTE ---
-        services.calculateRoute({
-            key: apiKey,
-            locations: [
-                [origin.lng, origin.lat],
-                [destination.lng, destination.lat]
-            ],
-            traffic: true
+        const routeUrl = `https://api.tomtom.com/routing/1/calculateRoute/${origin.lat},${origin.lng}:${destination.lat},${destination.lng}/json?key=${encodeURIComponent(apiKey)}&traffic=true`;
+        fetch(routeUrl)
+        .then((response) => {
+            if (!response.ok) throw new Error(`Route request failed: ${response.status}`);
+            return response.json();
         })
         .then((response) => {
-            const geojson = response.toGeoJson();
+            const points = response.routes?.[0]?.legs?.[0]?.points || [];
+            const geojson = {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: points.map(point => [point.longitude, point.latitude])
+                },
+                properties: {}
+            };
             map.addLayer({
                 id: 'route',
                 type: 'line',
