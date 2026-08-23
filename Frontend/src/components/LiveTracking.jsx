@@ -4,31 +4,48 @@ import { services } from '@tomtom-international/web-sdk-services';
 
 const apiKey = import.meta.env.VITE_TOMTOM_API_KEY;
 
-const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
+const LiveTracking = ({ pickupPosition, destinationPosition, onCancel, routeOrigin, routeDestination, destinationLabel = 'Destination', onLocationChange }) => {
     const mapElement = useRef(null);
     const mapInstance = useRef(null);
     const [mapLoaded, setMapLoaded] = useState(false);
+    const [mapError, setMapError] = useState(false);
     
     // Store Pickup/Dest markers here to delete them easily later
     const markersRef = useRef([]);
+    const driverMarkerRef = useRef(null);
+    const currentLocationRef = useRef(null);
+    const watchIdRef = useRef(null);
+    const onLocationChangeRef = useRef(onLocationChange);
+
+    useEffect(() => {
+        onLocationChangeRef.current = onLocationChange;
+    }, [onLocationChange]);
 
     // 1. Initialize Map & User Location (Blue Dot Logic)
     useEffect(() => {
         if (!mapElement.current || mapInstance.current) return;
 
+        if (!apiKey?.trim()) {
+            console.error('TomTom map key is missing. Set VITE_TOMTOM_API_KEY in the deployment environment.');
+            setMapError(true);
+            return;
+        }
+
         const defaultLocation = [73.8567, 18.5204]; // Pune Default
 
-        const map = tt.map({
-            key: apiKey,
-            container: mapElement.current,
-            center: defaultLocation, 
-            zoom: 15,
-            theme: {
-                style: 'main',
-                layer: 'basic',
-                source: 'vector',
-            }
-        });
+        let map;
+        try {
+            map = tt.map({
+                key: apiKey.trim(),
+                container: mapElement.current,
+                center: defaultLocation,
+                zoom: 15
+            });
+        } catch (error) {
+            console.error('TomTom map failed to initialize:', error);
+            setMapError(true);
+            return;
+        }
 
         mapInstance.current = map;
 
@@ -52,6 +69,7 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
             const userMarker = new tt.Marker({ element: markerDiv })
                 .setLngLat(defaultLocation)
                 .addTo(map);
+            driverMarkerRef.current = userMarker;
 
             // 3. Define function to update position
             const updateLocation = (position) => {
@@ -61,9 +79,11 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
                 // Move map center and marker to real location
                 map.setCenter([longitude, latitude]);
                 userMarker.setLngLat([longitude, latitude]);
+                currentLocationRef.current = { lat: latitude, lng: longitude };
+                onLocationChangeRef.current?.({ lat: latitude, lng: longitude });
             };
 
-            const handleError = (error) => {
+            const handleError = () => {
                 console.warn("Location error, staying at default.");
             };
 
@@ -73,9 +93,15 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
                 timeout: 5000, 
                 maximumAge: Infinity 
             });
+            watchIdRef.current = navigator.geolocation.watchPosition(updateLocation, handleError, {
+                enableHighAccuracy: true,
+                maximumAge: 5000,
+                timeout: 10000
+            });
         });
 
         return () => {
+            if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
             map.remove();
             setMapLoaded(false);
             mapInstance.current = null;
@@ -99,8 +125,12 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
         markersRef.current = []; // Reset array
 
         // --- VALIDATION ---
-        const hasValidPickup = pickupPosition && pickupPosition.lat && pickupPosition.lng;
-        const hasValidDest = destinationPosition && destinationPosition.lat && destinationPosition.lng;
+        // `routeOrigin`/`routeDestination` are the driver-navigation API. The
+        // legacy props remain supported for the passenger screens.
+        const origin = routeOrigin || pickupPosition;
+        const destination = routeDestination || destinationPosition;
+        const hasValidPickup = origin && origin.lat != null && origin.lng != null;
+        const hasValidDest = destination && destination.lat != null && destination.lng != null;
 
         if (!hasValidPickup || !hasValidDest) {
             return; // Stop here if data is missing
@@ -108,13 +138,13 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
 
         // --- DRAW NEW MARKERS ---
         const pickupMarker = new tt.Marker({ color: 'black' })
-            .setLngLat([pickupPosition.lng, pickupPosition.lat])
+            .setLngLat([origin.lng, origin.lat])
             .setPopup(new tt.Popup({ offset: 35 }).setHTML("<b>Pickup</b>"))
             .addTo(map);
         
         const destMarker = new tt.Marker({ color: '#22c55e' })
-            .setLngLat([destinationPosition.lng, destinationPosition.lat])
-            .setPopup(new tt.Popup({ offset: 35 }).setHTML("<b>Dropoff</b>"))
+            .setLngLat([destination.lng, destination.lat])
+            .setPopup(new tt.Popup({ offset: 35 }).setHTML(`<b>${destinationLabel}</b>`))
             .addTo(map);
 
         // Store in ref for next cleanup
@@ -123,16 +153,16 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
 
         // --- FIT MAP BOUNDS ---
         const bounds = new tt.LngLatBounds();
-        bounds.extend([pickupPosition.lng, pickupPosition.lat]);
-        bounds.extend([destinationPosition.lng, destinationPosition.lat]);
+        bounds.extend([origin.lng, origin.lat]);
+        bounds.extend([destination.lng, destination.lat]);
         map.fitBounds(bounds, { padding: 100, duration: 1000 });
 
         // --- CALCULATE ROUTE ---
         services.calculateRoute({
             key: apiKey,
             locations: [
-                [pickupPosition.lng, pickupPosition.lat],
-                [destinationPosition.lng, destinationPosition.lat]
+                [origin.lng, origin.lat],
+                [destination.lng, destination.lat]
             ],
             traffic: true
         })
@@ -147,11 +177,16 @@ const LiveTracking = ({ pickupPosition, destinationPosition, onCancel }) => {
         })
         .catch(err => console.error("Route calculation failed:", err));
 
-    }, [mapLoaded, pickupPosition, destinationPosition]);
+    }, [mapLoaded, pickupPosition, destinationPosition, routeOrigin, routeDestination, destinationLabel]);
 
     return (
         <div className="h-full w-full relative overflow-hidden">
             <div ref={mapElement} className="h-full w-full" />
+            {mapError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-100 px-6 text-center text-sm text-gray-600">
+                    Map unavailable. Check the TomTom API key and reload the app.
+                </div>
+            )}
 
             {/* Cancel Button */}
             {pickupPosition && destinationPosition && (
