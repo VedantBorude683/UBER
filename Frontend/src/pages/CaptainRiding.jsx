@@ -4,6 +4,7 @@ import FinishRide from '../components/FinishRide'
 import LiveTracking from '../components/LiveTracking'
 import DriverBottomSheet from '../components/DriverBottomSheet'
 import axios from 'axios'
+import { getAuthToken } from '../utils/authStorage'
 
 const CaptainRiding = () => {
     const [finishRidePanel, setFinishRidePanel] = useState(false)
@@ -42,7 +43,7 @@ const CaptainRiding = () => {
         const restoreOngoingRide = async () => {
             try {
                 const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/rides/active`, {
-                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                    headers: { Authorization: `Bearer ${getAuthToken('captain')}` }
                 })
                 const activeRide = response.data.ride
                 if (cancelled) return

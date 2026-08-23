@@ -8,6 +8,7 @@ import { CaptainDataContext } from '../context/CaptainContext'
 import LiveTracking from '../components/LiveTracking'
 import DriverBottomSheet from '../components/DriverBottomSheet'
 import axios from 'axios'
+import { getAuthToken } from '../utils/authStorage'
 
 const ACTIVE_RIDE_KEY = 'captain-active-ride'
 
@@ -130,7 +131,7 @@ const CaptainHome = () => {
         const restoreActiveRide = async () => {
             try {
                 const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/rides/active`, {
-                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                    headers: { Authorization: `Bearer ${getAuthToken('captain')}` }
                 })
                 const activeRide = response.data.ride
                 if (cancelled) return
@@ -167,7 +168,7 @@ const CaptainHome = () => {
                 },
                 {
                     headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`
+                        Authorization: `Bearer ${getAuthToken('captain')}`
                     }
                 }
             )
@@ -186,7 +187,7 @@ const CaptainHome = () => {
         if (!ride || !window.confirm('Cancel this accepted ride?')) return
         try {
             await axios.post(`${import.meta.env.VITE_BASE_URL}/rides/cancel`, { rideId: ride._id }, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                headers: { Authorization: `Bearer ${getAuthToken('captain')}` }
             })
             localStorage.removeItem(ACTIVE_RIDE_KEY)
             setRide(null)

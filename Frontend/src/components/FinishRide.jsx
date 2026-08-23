@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { getAuthToken } from '../utils/authStorage'
 import { SocketContext } from '../context/SocketContext'
 
 const FinishRide = (props) => {
@@ -36,7 +37,7 @@ const FinishRide = (props) => {
                 { rideId: props.ride._id },
                 {
                     headers: {
-                        Authorization: `Bearer ${localStorage.getItem('token')}`
+                        Authorization: `Bearer ${getAuthToken('captain')}`
                     }
                 }
             )

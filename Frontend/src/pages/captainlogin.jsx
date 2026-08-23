@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { CaptainDataContext } from '../context/CaptainContext'
+import { setAuthToken } from '../utils/authStorage'
 
 const CaptainLogin = () => {
 
@@ -25,7 +26,7 @@ const CaptainLogin = () => {
       const data = response.data
 
       setCaptain(data.captain)
-      localStorage.setItem('token', data.token)
+      setAuthToken('captain', data.token)
       navigate('/captain-home')
     }
 

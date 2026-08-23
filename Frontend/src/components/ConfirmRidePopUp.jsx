@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
+import { getAuthToken } from '../utils/authStorage'
 
 const getPassengerFirstName = (ride) => ride && ride.user && ride.user.fullname && ride.user.fullname.firstname || 'Passenger'
 const getPassengerInitial = (ride) => getPassengerFirstName(ride).charAt(0).toUpperCase()
@@ -19,7 +20,7 @@ const ConfirmRidePopUp = (props) => {
                     otp: otp
                 },
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                    Authorization: `Bearer ${getAuthToken('captain')}`
                 }
             })
 

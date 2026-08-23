@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import axios from 'axios';
 import { UserDataContext } from '../context/UserContext';
 import { useNavigate } from 'react-router-dom';
+import { setAuthToken } from '../utils/authStorage';
 
 const UserLogin = () => {
   const [email, setEmail] = useState('');
@@ -29,7 +30,7 @@ const UserLogin = () => {
         
         // Save User & Token
         setUser(data.user);
-        localStorage.setItem('token', data.token);
+        setAuthToken('user', data.token);
         
         // Redirect
         navigate('/home');

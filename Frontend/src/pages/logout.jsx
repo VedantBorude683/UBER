@@ -6,7 +6,7 @@ const UserLogout = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        const token = localStorage.getItem('token'); // Get token before removing
+        const token = localStorage.getItem('user-token') || localStorage.getItem('token'); // Get token before removing
 
         axios.get(`${import.meta.env.VITE_BASE_URL}/users/logout`, {
             headers: {
@@ -14,13 +14,13 @@ const UserLogout = () => {
             }
         }).then((response) => {
             if (response.status === 200) {
-                localStorage.removeItem('token');
+                localStorage.removeItem('user-token');
                 navigate('/login');
             }
         }).catch((err) => {
             console.error(err);
             // Even if server fails, remove local token and redirect
-            localStorage.removeItem('token'); 
+            localStorage.removeItem('user-token');
             navigate('/login');
         });
     }, [navigate]);

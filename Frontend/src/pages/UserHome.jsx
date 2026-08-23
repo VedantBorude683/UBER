@@ -12,6 +12,7 @@ import WaitingForDriver from '../components/WaitingForDriver';
 import LiveTracking from '../components/LiveTracking';
 import { SocketContext } from '../context/SocketContext';
 import { UserDataContext } from '../context/UserContext';
+import { getAuthToken } from '../utils/authStorage';
 
 
 const UserHome = () => {
@@ -96,7 +97,7 @@ const UserHome = () => {
             // Resolve it now so the captain-to-passenger route can be drawn.
             axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-coordinates`, {
                 params: { address: ride.pickup },
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                headers: { Authorization: `Bearer ${getAuthToken('user')}` }
             })
                 .then((response) => setPickupPosition(response.data))
                 .catch((error) => console.error('Could not load pickup location:', error));
@@ -140,7 +141,7 @@ const UserHome = () => {
             const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-suggestions`, {
                 params: { input: value.trim() },
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                    Authorization: `Bearer ${getAuthToken('user')}`
                 }
             });
             setPickupSuggestions(response.data);
@@ -160,7 +161,7 @@ const UserHome = () => {
             const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-suggestions`, {
                 params: { input: value.trim() },
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                    Authorization: `Bearer ${getAuthToken('user')}`
                 }
             });
             setDestinationSuggestions(response.data);
@@ -182,7 +183,7 @@ const UserHome = () => {
             const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-coordinates`, {
                 params: { address: location },
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                    Authorization: `Bearer ${getAuthToken('user')}`
                 }
             });
 
@@ -213,7 +214,7 @@ const UserHome = () => {
             const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/rides/get-fare`, {
                 params: { pickup, destination },
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                    Authorization: `Bearer ${getAuthToken('user')}`
                 }
             });
             setFare(response.data);
@@ -232,7 +233,7 @@ const UserHome = () => {
                 vehicleType
             }, {
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                    Authorization: `Bearer ${getAuthToken('user')}`
                 }
             });
             console.log(response.data);
@@ -323,7 +324,7 @@ const handleUseCurrentLocation = () => {
             const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-address-from-coordinates`, {
                 params: { lat: latitude, lng: longitude },
                 headers: {
-                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                    Authorization: `Bearer ${getAuthToken('user')}`
                 }
             });
 

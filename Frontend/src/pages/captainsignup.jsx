@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CaptainDataContext } from '../context/CaptainContext';
 import axios from 'axios';
+import { setAuthToken } from '../utils/authStorage';
 
 const CaptainSignup = () => {
   const navigate = useNavigate();
@@ -52,7 +53,7 @@ const CaptainSignup = () => {
       if (response.status === 201) {
         const data = response.data;
         setCaptain({...data.captain, status: "active"});
-        localStorage.setItem('token', data.token);
+        setAuthToken('captain', data.token);
        
         navigate('/captain-home');
       }
