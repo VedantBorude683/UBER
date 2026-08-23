@@ -1,5 +1,9 @@
 import React from 'react'
 //looking for the driver popup to accept or reject the ride
+const getPassengerFirstName = (ride) => ride && ride.user && ride.user.fullname && ride.user.fullname.firstname || 'Passenger'
+const getPassengerLastName = (ride) => ride && ride.user && ride.user.fullname && ride.user.fullname.lastname || ''
+const getPassengerInitial = (ride) => getPassengerFirstName(ride).charAt(0).toUpperCase()
+
 const RidePopUp = (props) => {
     return (
         <div>
@@ -7,10 +11,10 @@ const RidePopUp = (props) => {
             <div className='flex items-center justify-between p-3 bg-yellow-400 rounded-lg mt-4'>
                 <div className='flex items-center gap-3 '>
                     <div className='flex h-12 w-12 items-center justify-center rounded-full bg-gray-900 text-lg font-bold text-white'>
-                        {props.ride?.user?.fullname?.firstname?.charAt(0)?.toUpperCase() || '?'}
+                        {getPassengerInitial(props.ride)}
                     </div>
                     <h2 className='text-lg font-medium'>
-                        {props.ride?.user?.fullname?.firstname || 'Passenger'} {props.ride?.user?.fullname?.lastname || ''}
+                        {getPassengerFirstName(props.ride)} {getPassengerLastName(props.ride)}
                     </h2>
                 </div>
                 <h5 className='text-lg font-semibold'>{props.ride?.distance} KM</h5>

@@ -2,6 +2,9 @@ import React, { useState } from 'react'
 import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 
+const getPassengerFirstName = (ride) => ride && ride.user && ride.user.fullname && ride.user.fullname.firstname || 'Passenger'
+const getPassengerInitial = (ride) => getPassengerFirstName(ride).charAt(0).toUpperCase()
+
 const ConfirmRidePopUp = (props) => {
     const [ otp, setOtp ] = useState('')
     const navigate = useNavigate()
@@ -40,10 +43,10 @@ const ConfirmRidePopUp = (props) => {
             <div className='flex items-center justify-between p-3 border-2 border-yellow-400 rounded-lg mt-4'>
                 <div className='flex items-center gap-3 '>
                     <div className='flex h-12 w-12 items-center justify-center rounded-full bg-gray-900 text-lg font-bold text-white'>
-                        {props.ride?.user?.fullname?.firstname?.charAt(0)?.toUpperCase() || '?'}
+                        {getPassengerInitial(props.ride)}
                     </div>
                     <h2 className='text-lg font-medium capitalize'>
-                        {props.ride?.user?.fullname?.firstname || 'Passenger'}
+                        {getPassengerFirstName(props.ride)}
                     </h2>
                 </div>
                 <h5 className='text-lg font-semibold'>{props.ride?.distance} KM</h5>
