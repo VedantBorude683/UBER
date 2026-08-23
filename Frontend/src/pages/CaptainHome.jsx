@@ -12,6 +12,10 @@ import axios from 'axios'
 const ACTIVE_RIDE_KEY = 'captain-active-ride'
 
 const CaptainHome = () => {
+    const { socket } = useContext(SocketContext)
+    const { captain } = useContext(CaptainDataContext)
+    const navigate = useNavigate()
+
     const [ridePopupPanel, setRidePopupPanel] = useState(false)
     const [confirmRidePopupPanel, setConfirmRidePopupPanel] = useState(false)
     const [ride, setRide] = useState(null)
@@ -20,10 +24,6 @@ const CaptainHome = () => {
     // Map coords: captain → user pickup
     const [mapPickup, setMapPickup] = useState(null)
     const [mapDestination, setMapDestination] = useState(null)
-
-    const { socket } = useContext(SocketContext)
-    const { captain } = useContext(CaptainDataContext)
-    const navigate = useNavigate()
 
     const distanceToPickupMeters = (() => {
         if (!mapPickup || !mapDestination) return null
