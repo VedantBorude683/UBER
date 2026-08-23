@@ -6,6 +6,14 @@ const rideModel = require('../models/ride.model');
 
 const CAPTAIN_SEARCH_RADIUS_KM = 10;
 
+const vehicleTypesMatch = (captainType, rideType) => {
+    const normalizedCaptainType = captainType?.toLowerCase();
+    const normalizedRideType = rideType?.toLowerCase() === 'motorcycle' ? 'moto' : rideType?.toLowerCase();
+    return normalizedCaptainType === normalizedRideType ||
+        (normalizedCaptainType === 'motorcycle' && normalizedRideType === 'moto') ||
+        (normalizedCaptainType === 'moto' && normalizedRideType === 'motorcycle');
+};
+
 module.exports.createRide = async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -27,11 +35,20 @@ module.exports.createRide = async (req, res) => {
         console.log("📍 Pickup Coordinates:", pickupCoordinates);
 
         // 2. Find Captains
-        const captainsInRadius = await mapService.getCaptainsInTheRadius(
+        let captainsInRadius = await mapService.getCaptainsInTheRadius(
             pickupCoordinates.lat,
             pickupCoordinates.lng,
             CAPTAIN_SEARCH_RADIUS_KM
         );
+        // Keep a connected captain eligible when mobile GPS is stale or the
+        // geospatial record has not updated yet. Vehicle type still matches.
+        if (captainsInRadius.length === 0) {
+            captainsInRadius = await require('../models/captain.model').find({
+                status: 'active',
+                socketId: { $exists: true, $ne: '' }
+            });
+            console.log('No nearby captains found; checking active connected captains.');
+        }
         console.log(`🚕 Captains found within ${CAPTAIN_SEARCH_RADIUS_KM} km:`, captainsInRadius.length);
 
         // 3. Clear sensitive data
@@ -42,11 +59,7 @@ module.exports.createRide = async (req, res) => {
             console.log(`🔎 Checking Captain ${captain.fullname.firstname}: Status=${captain.status}, Type=${captain.vehicle.vehicleType}`);
 
             // Normalize: ride uses 'moto', captain model uses 'motorcycle'
-            const captainType = captain.vehicle?.vehicleType?.toLowerCase();
-            const rideType = vehicleType?.toLowerCase() === 'motorcycle' ? 'moto' : vehicleType?.toLowerCase();
-            const typeMatches = captainType === rideType ||
-                (captainType === 'motorcycle' && rideType === 'moto') ||
-                (captainType === 'moto' && rideType === 'motorcycle');
+            const typeMatches = vehicleTypesMatch(captain.vehicle?.vehicleType, vehicleType);
 
             if (captain.status === 'active' && captain.socketId && typeMatches) {
                 console.log(`🔔 Sending Ride Request to Captain: ${captain.socketId}`);
@@ -55,7 +68,7 @@ module.exports.createRide = async (req, res) => {
                     data: rideWithUser
                 });
             } else {
-                console.log(`❌ Captain skipped (status=${captain.status}, socket=${captain.socketId ? 'connected' : 'missing'}, captainType=${captainType}, rideType=${rideType})`);
+                console.log(`❌ Captain skipped (status=${captain.status}, socket=${captain.socketId ? 'connected' : 'missing'}, captainType=${captain.vehicle?.vehicleType}, rideType=${vehicleType})`);
             }
             
         });
