@@ -130,10 +130,15 @@ const UserHome = () => {
 
     // --- Handlers ---
     const handlePickupChange = async (e) => {
-        setPickup(e.target.value);
+        const value = e.target.value;
+        setPickup(value);
+        if (value.trim().length < 3) {
+            setPickupSuggestions([]);
+            return;
+        }
         try {
             const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-suggestions`, {
-                params: { input: e.target.value },
+                params: { input: value.trim() },
                 headers: {
                     Authorization: `Bearer ${localStorage.getItem('token')}`
                 }
@@ -145,10 +150,15 @@ const UserHome = () => {
     };
 
     const handleDestinationChange = async (e) => {
-        setDestination(e.target.value);
+        const value = e.target.value;
+        setDestination(value);
+        if (value.trim().length < 3) {
+            setDestinationSuggestions([]);
+            return;
+        }
         try {
             const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-suggestions`, {
-                params: { input: e.target.value },
+                params: { input: value.trim() },
                 headers: {
                     Authorization: `Bearer ${localStorage.getItem('token')}`
                 }
@@ -191,6 +201,11 @@ const UserHome = () => {
     };
 
     async function findTrip() {
+        if (pickup.trim().length < 3 || destination.trim().length < 3) {
+            alert('Please enter valid pickup and destination locations.');
+            return;
+        }
+
         setVehiclePanelOpen(true);
         setPanelOpen(false);
 
@@ -204,6 +219,8 @@ const UserHome = () => {
             setFare(response.data);
         } catch (err) {
             console.error(err);
+            setVehiclePanelOpen(false);
+            alert(err.response?.data?.message || 'Unable to calculate fare for these locations.');
         }
     }
 
@@ -223,6 +240,7 @@ const UserHome = () => {
             setConfirmRidePanelOpen(false);
         } catch (err) {
             console.error(err);
+            alert(err.response?.data?.message || 'Unable to create the ride. Please try again.');
         }
     }
 
