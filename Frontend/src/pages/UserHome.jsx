@@ -358,7 +358,7 @@ const handleUseCurrentLocation = () => {
                 />
             </div>
             {/* Search Form Wrapper */}
-            <div className={`flex flex-col justify-end h-screen absolute top-0 w-full z-20 pointer-events-none ${vehiclePanelOpen ? 'hidden' : 'flex'}`}>
+            <div className={`flex flex-col justify-end h-screen absolute top-0 w-full z-20 pointer-events-none ${vehiclePanelOpen || confirmRidePanelOpen || vehicleFound || waitingForDriver ? 'hidden' : 'flex'}`}>
                 
                 {/* MOBILE FIX: 
                    1. Changed h-[30%] to h-auto (Let it grow if needed)
@@ -448,7 +448,7 @@ const handleUseCurrentLocation = () => {
                 />
             </div>
 
-            <div ref={confirmRidePanelRef} className='fixed bottom-0 z-10 w-full translate-y-full rounded-t-3xl bg-white px-3 py-3 shadow-2xl'>
+            <div ref={confirmRidePanelRef} className='fixed bottom-0 z-30 w-full translate-y-full rounded-t-3xl bg-white px-3 py-3 shadow-2xl'>
                 <ConfirmRide 
                     createRide={createRide}
                     pickup={pickup}
