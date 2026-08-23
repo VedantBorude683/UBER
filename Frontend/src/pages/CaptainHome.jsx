@@ -20,6 +20,7 @@ const CaptainHome = () => {
     const [ridePopupPanel, setRidePopupPanel] = useState(false)
     const [confirmRidePopupPanel, setConfirmRidePopupPanel] = useState(false)
     const [ride, setRide] = useState(null)
+    const [isAcceptingRide, setIsAcceptingRide] = useState(false)
     const [socketConnected, setSocketConnected] = useState(socket?.connected || false)
 
     // Map coords: captain → user pickup
@@ -165,6 +166,8 @@ const CaptainHome = () => {
     }, [captain?._id])
 
     async function confirmRide() {
+        if (!ride?._id || !captain?._id || isAcceptingRide) return
+        setIsAcceptingRide(true)
         try {
             const response = await axios.post(
                 `${import.meta.env.VITE_BASE_URL}/rides/confirm`,
@@ -186,6 +189,9 @@ const CaptainHome = () => {
             }
         } catch (error) {
             console.error('Confirm error', error)
+            alert(error.response?.data?.message || 'Unable to accept this ride. Please try again.')
+        } finally {
+            setIsAcceptingRide(false)
         }
     }
 
@@ -271,6 +277,7 @@ const CaptainHome = () => {
                     setRidePopupPanel={setRidePopupPanel}
                     setConfirmRidePopupPanel={setConfirmRidePopupPanel}
                     confirmRide={confirmRide}
+                    isAccepting={isAcceptingRide}
                 />
             </DriverBottomSheet>
             )}
