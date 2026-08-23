@@ -1,4 +1,4 @@
-import React, { useState, useRef, useContext } from 'react';
+import React, { useState, useRef, useContext ,useEffect} from 'react';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import axios from 'axios';
@@ -12,6 +12,7 @@ import WaitingForDriver from '../components/WaitingForDriver';
 import LiveTracking from '../components/LiveTracking';
 import { SocketContext } from '../context/SocketContext';
 import { UserDataContext } from '../context/UserContext';
+
 
 const UserHome = () => {
     // --- State Variables ---
@@ -31,10 +32,12 @@ const UserHome = () => {
     const [fare, setFare] = useState({});
     const [vehicleType, setVehicleType] = useState(null);
     const [ride, setRide] = useState(null);
+    const [captainLocation, setCaptainLocation] = useState(null);
 
     // --- Map State ---
     const [pickupPosition, setPickupPosition] = useState(null);
     const [destinationPosition, setDestinationPosition] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     const navigate = useNavigate();
     const { socket } = useContext(SocketContext);
@@ -48,6 +51,82 @@ const UserHome = () => {
     const vehicleFoundRef = useRef(null);
     const waitingForDriverRef = useRef(null);
     const sidebarRef = useRef(null);
+    // --- 🔌 FAIL-SAFE SOCKET CONNECTION ---
+    
+    useEffect(() => {
+        
+        console.log("🔍 USER OBJECT DEBUG:", user);
+
+        const userId = user?._id || user?.user?._id; 
+
+        if (!userId) {
+            console.log("❌ User ID not found in context yet. Waiting...");
+            return;
+        }
+
+        // 2. Define the Join Function so we can use it in 'connect' listener
+        const sendJoinMessage = () => {
+            console.log(`🔌 Joining as User: ${userId}`);
+            socket.emit("join", { 
+                userType: "user", 
+                userId: userId 
+            });
+        };
+
+        // 3. Connect and Emit
+        if (!socket.connected) {
+            socket.connect();
+        } 
+        
+        // If already connected, join immediately
+        if (socket.connected) {
+            sendJoinMessage();
+        }
+
+        // 4. Listen for connection (in case it connects later)
+        socket.on('connect', sendJoinMessage);
+        // 6. Listen for Ride Updates
+        const handleRideConfirmed = (ride) => {
+            console.log("✅ RIDE CONFIRMED:", ride);
+            setVehicleFound(false);
+            setWaitingForDriver(true);
+            setRide(ride);
+
+            // A pickup typed manually may not yet have map coordinates.
+            // Resolve it now so the captain-to-passenger route can be drawn.
+            axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-coordinates`, {
+                params: { address: ride.pickup },
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            })
+                .then((response) => setPickupPosition(response.data))
+                .catch((error) => console.error('Could not load pickup location:', error));
+        };
+
+        const handleRideStarted = (ride) => {
+            console.log("🚀 RIDE STARTED");
+            setWaitingForDriver(false);
+            navigate('/riding', { state: { ride } }); 
+        };
+
+        const handleCaptainLocation = (location) => {
+            if (location?.ltd != null && location?.lng != null) {
+                setCaptainLocation({ lat: location.ltd, lng: location.lng });
+            }
+        };
+
+        socket.on('ride-confirmed', handleRideConfirmed);
+        socket.on('ride-started', handleRideStarted);
+        socket.on('live-tracking-data', handleCaptainLocation);
+
+        // Cleanup
+        return () => {
+            socket.off('connect', sendJoinMessage);
+            socket.off('ride-confirmed', handleRideConfirmed);
+            socket.off('ride-started', handleRideStarted);
+            socket.off('live-tracking-data', handleCaptainLocation);
+        };
+
+    }, [user, socket]);
 
     // --- Handlers ---
     const handlePickupChange = async (e) => {
@@ -205,8 +284,41 @@ const UserHome = () => {
     setVehiclePanelOpen(false);
     setPanelOpen(false);
     setConfirmRidePanelOpen(false);
+
     // Add any other state resets here
 };
+
+const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser');
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+        const { latitude, longitude } = position.coords;
+
+        // 1. Set the visual marker immediately (optional, but good for UX)
+        setPickupPosition({ lat: latitude, lng: longitude });
+
+        try {
+            // 2. Ask Backend for the address
+            const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/maps/get-address-from-coordinates`, {
+                params: { lat: latitude, lng: longitude },
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            // 3. Auto-fill the input field
+            setPickup(response.data.address);
+
+        } catch (error) {
+            console.error("Error fetching address:", error);
+        }
+    });
+};
+
+
 
     return (
         <div className='h-screen w-screen relative overflow-hidden bg-gray-100'>
@@ -240,55 +352,80 @@ const UserHome = () => {
             {/* Map Background */}
             <div className='fixed h-screen w-screen top-0 left-0 z-0'>
                 <LiveTracking 
-                    pickupPosition={pickupPosition} 
-                    destinationPosition={destinationPosition} 
+                    pickupPosition={waitingForDriver ? captainLocation : pickupPosition} 
+                    destinationPosition={waitingForDriver ? pickupPosition : destinationPosition} 
                     onCancel={handleClearRoute}
                 />
             </div>
-
-            {/* Search Form - FIX APPLIED HERE */}
-            <div className='flex flex-col justify-end h-screen absolute top-0 w-full z-20 pointer-events-none'>
-                {/* Added pointer-events-auto to the child div */}
-                <div className='h-[30%] p-6 bg-white relative pointer-events-auto'>
-                    <h5 ref={panelCloseRef} onClick={() => setPanelOpen(false)} className='absolute opacity-0 right-6 top-6 text-2xl cursor-pointer'>
-                        <i className="ri-arrow-down-wide-line"></i>
+            {/* Search Form Wrapper */}
+            <div className={`flex flex-col justify-end h-screen absolute top-0 w-full z-20 pointer-events-none ${vehiclePanelOpen ? 'hidden' : 'flex'}`}>
+                
+                {/* MOBILE FIX: 
+                   1. Changed h-[30%] to h-auto (Let it grow if needed)
+                   2. Added min-h-[35%] to ensure enough touch space
+                */}
+                <div className='h-auto min-h-[35%] p-5 bg-white relative pointer-events-auto shadow-lg rounded-t-3xl'>
+                    
+                    {/* Close Arrow */}
+                    <h5 ref={panelCloseRef} onClick={() => setPanelOpen(false)} className='absolute opacity-0 right-6 top-6 text-2xl cursor-pointer w-10 h-10 flex items-center justify-center'>
+                        <i className="ri-arrow-down-wide-line text-gray-800 font-bold"></i>
                     </h5>
-                    <h4 className='text-2xl font-semibold'>Find a trip</h4>
+
+                    <h4 className='text-2xl font-bold mb-4'>Find a trip</h4>
                     
                     <form className='relative py-3' onSubmit={submitHandler}>
-                        <div className="line absolute h-16 w-1 top-[50%] -translate-y-1/2 left-5 bg-gray-700 rounded-full"></div>
+                        {/* Connecting Line */}
+                        <div className="line absolute h-12 w-1 top-[45%] -translate-y-1/2 left-4 bg-gray-900 rounded-full"></div>
                         
-                        <input 
-                            onClick={() => {
-                                setPanelOpen(true);
-                                setActiveField('pickup');
-                            }}
-                            value={pickup}
-                            onChange={handlePickupChange}
-                            className='bg-[#eee] px-12 py-2 text-lg rounded-lg w-full mt-5' 
-                            type="text" 
-                            placeholder='Add a pick-up location' 
-                        />
+                        {/* Pickup Input */}
+                        <div className='relative w-full mb-3'>
+                            {/* Mobile Fix: text-base prevents iOS zoom on focus */}
+                            <input 
+                                onClick={() => {
+                                    setPanelOpen(true);
+                                    setActiveField('pickup');
+                                }}
+                                value={pickup}
+                                onChange={handlePickupChange}
+                                className='bg-[#eee] px-10 py-3 text-base font-medium rounded-lg w-full pr-10 focus:outline-none focus:ring-2 focus:ring-black' 
+                                type="text" 
+                                placeholder='Add a pick-up location' 
+                            />
+                            <i 
+                                onClick={handleUseCurrentLocation}
+                                className="ri-map-pin-user-fill absolute right-3 top-1/2 -translate-y-1/2 text-lg text-gray-500 hover:text-black cursor-pointer z-10 p-2"
+                            ></i>
+                            <i className="ri-circle-fill absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-800"></i>
+                        </div>
                         
-                        <input 
-                            onClick={() => {
-                                setPanelOpen(true);
-                                setActiveField('destination');
-                            }}
-                            value={destination}
-                            onChange={handleDestinationChange}
-                            className='bg-[#eee] px-12 py-2 text-lg rounded-lg w-full mt-3' 
-                            type="text" 
-                            placeholder='Enter your destination' 
-                        />
+                        {/* Destination Input */}
+                        <div className='relative w-full'>
+                            <input 
+                                onClick={() => {
+                                    setPanelOpen(true);
+                                    setActiveField('destination');
+                                }}
+                                value={destination}
+                                onChange={handleDestinationChange}
+                                className='bg-[#eee] px-10 py-3 text-base font-medium rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-black' 
+                                type="text" 
+                                placeholder='Enter your destination' 
+                            />
+                            <i className="ri-map-pin-fill absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-800"></i>
+                        </div>
                     </form>
                     
-                    <button onClick={findTrip} className='bg-black text-white px-4 py-2 rounded-lg mt-3 w-full'>
-                        Find Trip
+                    <button 
+                        onClick={findTrip} 
+                        disabled={isLoading}
+                        className={`bg-black text-white px-4 py-3 text-lg rounded-lg mt-4 w-full font-bold shadow-md flex items-center justify-center transition-all active:scale-95 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    >
+                        {isLoading ? <span className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></span> : "Find Trip"}
                     </button>
                 </div>
                 
-                <div ref={panelRef} className='bg-white h-0 pointer-events-auto'>
+                {/* Suggestions Panel */}
+                <div ref={panelRef} className='bg-white h-0 pointer-events-auto overflow-y-auto'>
                     <LocationSearchPanel
                         suggestions={activeField === 'pickup' ? pickupSuggestions : destinationSuggestions}
                         setPanelOpen={setPanelOpen}
@@ -311,7 +448,7 @@ const UserHome = () => {
                 />
             </div>
 
-            <div ref={confirmRidePanelRef} className='fixed w-full z-10 bottom-0 translate-y-full bg-white px-3 py-6 pt-12'>
+            <div ref={confirmRidePanelRef} className='fixed bottom-0 z-10 w-full translate-y-full rounded-t-3xl bg-white px-3 py-3 shadow-2xl'>
                 <ConfirmRide 
                     createRide={createRide}
                     pickup={pickup}
@@ -337,6 +474,7 @@ const UserHome = () => {
             <div ref={waitingForDriverRef} className='fixed w-full z-10 bottom-0 translate-y-full bg-white px-3 py-6 pt-12'>
                 <WaitingForDriver 
                     ride={ride}
+                    socket={socket}
                     setVehicleFound={setVehicleFound}
                     setWaitingForDriver={setWaitingForDriver}
                     waitingForDriver={waitingForDriver}
