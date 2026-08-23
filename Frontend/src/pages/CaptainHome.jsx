@@ -15,6 +15,7 @@ const CaptainHome = () => {
     const [ridePopupPanel, setRidePopupPanel] = useState(false)
     const [confirmRidePopupPanel, setConfirmRidePopupPanel] = useState(false)
     const [ride, setRide] = useState(null)
+    const [socketConnected, setSocketConnected] = useState(socket?.connected || false)
 
     // Map coords: captain → user pickup
     const [mapPickup, setMapPickup] = useState(null)
@@ -58,7 +59,12 @@ const CaptainHome = () => {
         }
 
         const handleConnect = () => updatePresence()
+        const handleConnectionState = () => setSocketConnected(socket.connected)
         socket.on('connect', handleConnect)
+        socket.on('connect', handleConnectionState)
+        socket.on('disconnect', handleConnectionState)
+        socket.on('connect_error', handleConnectionState)
+        handleConnectionState()
         if (socket.connected) updatePresence()
 
         const locationInterval = setInterval(() => {
@@ -68,6 +74,9 @@ const CaptainHome = () => {
         return () => {
             clearInterval(locationInterval)
             socket.off('connect', handleConnect)
+            socket.off('connect', handleConnectionState)
+            socket.off('disconnect', handleConnectionState)
+            socket.off('connect_error', handleConnectionState)
         }
     }, [captain?._id, socket])
 
@@ -204,6 +213,11 @@ const CaptainHome = () => {
                 >
                     <i className="text-lg font-medium ri-logout-box-r-line"></i>
                 </Link>
+            </div>
+
+            <div className='fixed left-4 top-20 z-10 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold shadow-md sm:left-6'>
+                <span className={`mr-1.5 inline-block h-2 w-2 rounded-full ${socketConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                {socketConnected ? 'Online for ride requests' : 'Connecting to ride requests...'}
             </div>
 
             {/* While accepted, route from the captain's GPS position to pickup. */}
