@@ -34,16 +34,16 @@ const CaptainHome = () => {
     })()
     const isAtPickup = distanceToPickupMeters !== null && distanceToPickupMeters <= 100
 
-    // Join socket + emit location every 10s
+    // Join socket after it connects and keep the captain location fresh.
     useEffect(() => {
-        if (!captain?._id) return
+        if (!captain?._id || !socket) return
 
-        socket.emit('join', {
-            userId: captain._id,
-            userType: 'captain'
-        })
+        const updatePresence = () => {
+            socket.emit('join', {
+                userId: captain._id,
+                userType: 'captain'
+            })
 
-        const updateLocation = () => {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(position => {
                     socket.emit('update-location-captain', {
@@ -53,15 +53,23 @@ const CaptainHome = () => {
                             lng: position.coords.longitude
                         }
                     })
-                })
+                    }, () => console.warn('Captain location permission is required for ride requests.'))
             }
         }
 
-        const locationInterval = setInterval(updateLocation, 10000)
-        updateLocation()
+        const handleConnect = () => updatePresence()
+        socket.on('connect', handleConnect)
+        if (socket.connected) updatePresence()
 
-        return () => clearInterval(locationInterval)
-    }, [captain?._id])
+        const locationInterval = setInterval(() => {
+            if (socket.connected) updatePresence()
+        }, 10000)
+
+        return () => {
+            clearInterval(locationInterval)
+            socket.off('connect', handleConnect)
+        }
+    }, [captain?._id, socket])
 
     // Listen for new ride — MUST be in useEffect to avoid duplicate listeners
     useEffect(() => {
